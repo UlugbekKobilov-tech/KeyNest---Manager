@@ -1238,90 +1238,13 @@ function openSaveModal() {
     desc: "Parollarni ochiq localStorage'da saqlash xavfli. Shifrlangan Vault tayyor bo'lguncha saqlash vaqtincha o'chirilgan.",
     alertOnly: true
   });
-  return;
-  const status = document.getElementById("status");
-  const t = i18n[currentLang];
-
-  if (!currentPassword) {
-    showModal({ title: "Ogohlantirish", desc: t.errorFirstGen, alertOnly: true });
-    return;
-  }
-
-  const folders = getFolders();
-  if (folders.length === 0) {
-    showModal({ title: "Ogohlantirish", desc: "Hali papka mavjud emas. Avval papka oching!", alertOnly: true });
-    return;
-  }
-
-  showModal({
-    title: t.modalSaveTitle,
-    desc: t.modalSaveDesc,
-    placeholder: "Masalan: Telegram / Parol",
-    showSelect: true,
-    optionsList: folders,
-    alertOnly: false,
-    callback: (res) => {
-      const history = getHistory();
-      history.unshift({
-        id: crypto.randomUUID(),
-        purpose: res.purpose || "Kod",
-        code: currentPassword,
-        folder: res.folder,
-        favorite: false,
-        claimedAt: new Date().toISOString()
-      });
-
-      setHistory(history);
-      renderTree();
-
-      status.textContent = t.statusClaimed;
-      currentPassword = "";
-      document.getElementById("password").textContent = "••••••••••••••••••••";
-      updateStrengthMeter("");
-    }
-  });
 }
 
-function openClaimModalForFolder(targetFolder) {
+function openClaimModalForFolder() {
   showModal({
     title: "Xavfsizlik rejimi",
-    desc: "Parollarni ochiq localStorage'da saqlash xavfli. Shifrlangan Vault tayyor bo'lguncha saqlash vaqtincha o'chirilgan.",
+    desc: "Papkalarga parol saqlash shifrlangan Vault tayyor bo'lguncha vaqtincha o'chirilgan.",
     alertOnly: true
-  });
-  return;
-  const status = document.getElementById("status");
-  const t = i18n[currentLang];
-
-  if (!currentPassword) {
-    showModal({ title: "Ogohlantirish", desc: t.errorFirstGen, alertOnly: true });
-    return;
-  }
-
-  showModal({
-    title: t.modalSaveTitle,
-    desc: `"${targetFolder}" papkasi uchun sarlavha kiriting:`,
-    placeholder: "Masalan: Google / Account",
-    showSelect: false,
-    alertOnly: false,
-    callback: (res) => {
-      const history = getHistory();
-      history.unshift({
-        id: crypto.randomUUID(),
-        purpose: res.purpose || "Kod",
-        code: currentPassword,
-        folder: targetFolder,
-        favorite: false,
-        claimedAt: new Date().toISOString()
-      });
-
-      setHistory(history);
-      renderTree();
-
-      status.textContent = t.statusClaimed;
-      currentPassword = "";
-      document.getElementById("password").textContent = "••••••••••••••••••••";
-      updateStrengthMeter("");
-    }
   });
 }
 
