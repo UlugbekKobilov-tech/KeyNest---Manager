@@ -1082,7 +1082,18 @@ function getFolders() {
 function setFolders(data) { localStorage.setItem(FOLDER_KEY, JSON.stringify(data)); }
 
 function getRecentGenerations() {
-  try { return JSON.parse(localStorage.getItem(RECENT_GEN_KEY) || "[]"); } catch { return []; }
+  try {
+    const stored = JSON.parse(localStorage.getItem(RECENT_GEN_KEY) || "[]");
+    if (!Array.isArray(stored)) return [];
+    // Oldingi versiya parollarni history'ga yozgan. Faqat vaqt metama'lumotini qoldiramiz.
+    const safe = stored.slice(0, 15).map(item => ({ time: String(item && item.time || "") }));
+    if (JSON.stringify(stored) !== JSON.stringify(safe)) {
+      localStorage.setItem(RECENT_GEN_KEY, JSON.stringify(safe));
+    }
+    return safe;
+  } catch {
+    return [];
+  }
 }
 function addRecentGeneration() {
   // Parolning o'zi tarixga yozilmaydi — faqat vaqt metama'lumoti saqlanadi.
@@ -1222,6 +1233,12 @@ function openFolderModal() {
 }
 
 function openSaveModal() {
+  showModal({
+    title: "Xavfsizlik rejimi",
+    desc: "Parollarni ochiq localStorage'da saqlash xavfli. Shifrlangan Vault tayyor bo'lguncha saqlash vaqtincha o'chirilgan.",
+    alertOnly: true
+  });
+  return;
   const status = document.getElementById("status");
   const t = i18n[currentLang];
 
