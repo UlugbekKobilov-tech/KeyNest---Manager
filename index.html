@@ -1084,10 +1084,11 @@ function setFolders(data) { localStorage.setItem(FOLDER_KEY, JSON.stringify(data
 function getRecentGenerations() {
   try { return JSON.parse(localStorage.getItem(RECENT_GEN_KEY) || "[]"); } catch { return []; }
 }
-function addRecentGeneration(pwd) {
-  let list = getRecentGenerations();
-  list.unshift({ code: pwd, time: new Date().toLocaleTimeString() });
-  if (list.length > 15) list.pop(); // Oxirgi 15 tasini saqlash
+function addRecentGeneration() {
+  // Parolning o'zi tarixga yozilmaydi — faqat vaqt metama'lumoti saqlanadi.
+  const list = getRecentGenerations();
+  list.unshift({ time: new Date().toLocaleTimeString() });
+  if (list.length > 15) list.pop();
   localStorage.setItem(RECENT_GEN_KEY, JSON.stringify(list));
 }
 
@@ -1110,24 +1111,18 @@ function togglePasswordMask() {
 function openHistoryModal() {
   const recent = getRecentGenerations();
   if (recent.length === 0) {
-    showModal({ title: "🕒 Generatsiya Tarixi", desc: "Hali hech qanday kod yaratilmadi.", alertOnly: true });
+    showModal({ title: "🕒 Generatsiya Tarixi", desc: "Hali generatsiya qilinmagan.", alertOnly: true });
     return;
   }
-
-  let html = `<div style="display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto;">`;
-  recent.forEach((item, idx) => {
-    html += `
-      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--box-bg); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-        <span style="font-family: monospace; font-size: 13px; color: var(--primary-color);">${item.code}</span>
-        <span style="font-size: 11px; color: var(--subtext-color);">${item.time}</span>
-      </div>
-    `;
-  });
-  html += `</div>`;
-
+  const safeTimes = recent.map(item => String(item.time || "").replace(/[&<>"']/g, ch =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch])
+  ));
+  const html = `<div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;">` +
+    safeTimes.map(time => `<div style="padding:8px 12px;border:1px solid var(--border-color);border-radius:8px;">Yaratilgan vaqt: ${time}</div>`).join("") +
+    `</div>`;
   showModal({
-    title: "🕒 Oxirgi Yaratilgan Kodlar",
-    desc: "Saqlashni unutgan bo'lsangiz, bu yerdan nusxalab oling:",
+    title: "🕒 Generatsiya tarixi",
+    desc: "Xavfsizlik uchun yaratilgan parollarning o'zi tarixda saqlanmaydi.",
     placeholder: null,
     alertOnly: true,
     customHtml: html
@@ -1271,6 +1266,12 @@ function openSaveModal() {
 }
 
 function openClaimModalForFolder(targetFolder) {
+  showModal({
+    title: "Xavfsizlik rejimi",
+    desc: "Parollarni ochiq localStorage'da saqlash xavfli. Shifrlangan Vault tayyor bo'lguncha saqlash vaqtincha o'chirilgan.",
+    alertOnly: true
+  });
+  return;
   const status = document.getElementById("status");
   const t = i18n[currentLang];
 
@@ -1507,7 +1508,7 @@ function generatePassword() {
       for (let i = 0; i < count; i++) {
         selectedWords.push(wordsList[randomInt(wordsList.length)]);
       }
-      candidate = selectedWords.join("-") + "-" + Math.floor(10 + Math.random() * 90);
+      candidate = selectedWords.join("-") + "-" + 10 + randomInt(90);
     } else {
       const groups = [];
       if (document.getElementById("uppercase").checked) groups.push("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
@@ -1564,71 +1565,13 @@ async function copyPassword() {
 }
 
 function renderTree() {
+  // Legacy vault yozuvlari ochiq matnda bo'lishi mumkin. Ularni HTML'ga
+  // joylamaymiz; shifrlangan migratsiya tayyor bo'lguncha ro'yxat yashirin.
   const container = document.getElementById("treeContainer");
-  const folders = getFolders();
-  const history = getHistory();
-  const t = i18n[currentLang];
-
-  if (folders.length === 0) {
-    container.innerHTML = `<div class="empty-folder">${t.emptyFolder}</div>`;
-    return;
-  }
-
-  let html = "";
-
-  folders.forEach(folder => {
-    let folderItems = history.filter(item => item.folder === folder);
-    if (searchQuery) {
-      folderItems = folderItems.filter(item => 
-        item.purpose.toLowerCase().includes(searchQuery) || 
-        item.code.toLowerCase().includes(searchQuery)
-      );
-    }
-
-    html += `
-      <div class="tree-folder" ${searchQuery && folderItems.length === 0 ? 'style="display:none;"' : ''}>
-        <div class="tree-folder-header" onclick="toggleFolderContent(this)">
-          <span>📂 ${folder} (${folderItems.length})</span>
-          <div class="folder-actions-group" onclick="event.stopPropagation()">
-            <button class="small-btn" onclick="openClaimModalForFolder('${folder}')" title="Kod qo'shish">+</button>
-            <button class="small-btn delete-btn" onclick="deleteFolder('${folder}')">${t.delete}</button>
-          </div>
-        </div>
-        <div class="tree-folder-content">
-    `;
-
-    if (folderItems.length === 0) {
-      html += `<div class="empty-folder">${t.emptyFolder}</div>`;
-    } else {
-      folderItems.forEach(item => {
-        const isFav = item.favorite ? "★" : "☆";
-        html += `
-          <div class="tree-item">
-            <div class="tree-item-top">
-              <span class="tree-item-name">
-                <button class="small-btn fav-btn" onclick="toggleFavorite('${item.id}')" title="Sevimli">${isFav}</button>
-                📌 ${item.purpose}
-              </span>
-            </div>
-            <div class="tree-item-code">${item.code}</div>
-            <div class="tree-item-actions">
-              <button class="small-btn" onclick="copyText('${item.code}')">${t.copy}</button>
-              <button class="small-btn" onclick="copyLink('${item.code}')">🔗</button>
-              <button class="small-btn" onclick="renameItem('${item.id}')">${t.rename}</button>
-              <button class="small-btn delete-btn" onclick="deleteItem('${item.id}')">${t.delete}</button>
-            </div>
-          </div>
-        `;
-      });
-    }
-
-    html += `
-        </div>
-      </div>
-    `;
-  });
-
-  container.innerHTML = html;
+  const legacyItems = getHistory();
+  container.textContent = legacyItems.length
+    ? "Oldingi versiyadagi yozuvlar xavfsizlik sabab vaqtincha yashirilgan. Ular shifrlanmagan bo'lishi mumkin; shifrlangan migratsiya tayyor bo'lguncha bu yozuvlardan foydalanmang."
+    : "Saqlash funksiyasi shifrlangan Vault tayyor bo'lguncha vaqtincha o'chirilgan.";
 }
 
 function toggleFolderContent(headerElement) {
@@ -1641,11 +1584,6 @@ async function copyText(text) {
   document.getElementById("status").textContent = i18n[currentLang].copied;
 }
 
-async function copyLink(code) {
-  const shareLink = window.location.href.split('#')[0] + "#key=" + encodeURIComponent(code);
-  await navigator.clipboard.writeText(shareLink);
-  document.getElementById("status").textContent = i18n[currentLang].linkCopied;
-}
 
 function renameItem(id) {
   const history = getHistory();
@@ -1693,32 +1631,20 @@ function deleteFolder(folderName) {
 }
 
 function exportData() {
-  const data = { history: getHistory(), folders: getFolders() };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "keynest_backup.json";
-  a.click();
-  URL.revokeObjectURL(url);
+  showModal({
+    title: "Xavfsiz zaxira nusxasi",
+    desc: "Oddiy JSON eksport parollarni ochiq matnda saqlashi mumkin. Shifrlangan backup formati tayyor bo'lguncha eksport vaqtincha o'chirilgan.",
+    alertOnly: true
+  });
 }
 
 function importData(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const parsed = JSON.parse(e.target.result);
-      if (parsed.history) setHistory(parsed.history);
-      if (parsed.folders) setFolders(parsed.folders);
-      renderTree();
-      showModal({ title: "Muvaffaqiyatli", desc: "Ma'lumotlar import qilindi!", alertOnly: true });
-    } catch (err) {
-      showModal({ title: "Xatolik", desc: "Fayl formati noto'g'ri!", alertOnly: true });
-    }
-  };
-  reader.readAsText(file);
+  if (event && event.target) event.target.value = "";
+  showModal({
+    title: "Xavfsiz import",
+    desc: "Tekshirilgan va shifrlangan backup formati tayyor bo'lmaguncha import vaqtincha o'chirilgan.",
+    alertOnly: true
+  });
 }
 
 document.addEventListener("keydown", (e) => {
