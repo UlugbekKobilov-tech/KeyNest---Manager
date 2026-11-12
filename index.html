@@ -704,6 +704,48 @@ input:checked + .slider:before {
   font-size: 13px;
   color: var(--text-color);
 }
+
+/* KEYNEST 2.0 — SECURITY CENTER */
+.security-center {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto 20px;
+}
+.security-center .card { padding: 22px; }
+.security-head {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:14px; flex-wrap:wrap; margin-bottom:16px;
+}
+.security-head p { color:var(--subtext-color); font-size:13px; margin-top:4px; }
+.security-score-row {
+  display:grid; grid-template-columns:180px 1fr; gap:20px; align-items:center;
+}
+.score-tile {
+  border:1px solid var(--border-color); background:var(--box-bg);
+  border-radius:16px; padding:18px; text-align:center;
+}
+.score-number { font-size:42px; font-weight:850; letter-spacing:-2px; }
+.score-caption { color:var(--subtext-color); font-size:12px; }
+.security-meter { height:9px; background:var(--box-border); border-radius:99px; overflow:hidden; margin:10px 0; }
+.security-meter-fill { height:100%; width:0; background:#16a34a; transition:width .25s; }
+.security-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.security-stat {
+  background:var(--box-bg); border:1px solid var(--border-color);
+  border-radius:14px; padding:14px;
+}
+.security-stat strong { display:block; font-size:23px; margin-bottom:4px; }
+.security-stat span { color:var(--subtext-color); font-size:12px; }
+.security-note {
+  margin-top:14px; padding:12px 14px; border-radius:12px;
+  background:var(--danger-bg); color:var(--danger-color);
+  font-size:12px; line-height:1.5;
+}
+.security-status { font-size:12px; color:var(--subtext-color); margin-top:10px; }
+@media(max-width:700px) {
+  .security-score-row { grid-template-columns:1fr; }
+  .security-stats { grid-template-columns:1fr 1fr; }
+}
+
 </style>
 </head>
 
@@ -720,6 +762,36 @@ input:checked + .slider:before {
     <button class="header-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Mavzu">🌙</button>
   </div>
 </header>
+
+
+<section class="security-center">
+  <div class="card">
+    <div class="security-head">
+      <div>
+        <h2>🛡️ KeyNest Security Center</h2>
+        <p>Saqlangan parollaringizni ushbu qurilmada tahlil qiling.</p>
+      </div>
+      <button class="small-btn" onclick="analyzeVault()">↻ Tahlilni yangilash</button>
+    </div>
+    <div class="security-score-row">
+      <div class="score-tile">
+        <div class="score-number" id="securityScore">—</div>
+        <div class="score-caption">Security Score / 100</div>
+        <div class="security-meter"><div class="security-meter-fill" id="securityScoreBar"></div></div>
+        <div class="score-caption" id="securityGrade">Hali tahlil qilinmadi</div>
+      </div>
+      <div class="security-stats">
+        <div class="security-stat"><strong id="vaultTotal">0</strong><span>Jami parollar</span></div>
+        <div class="security-stat"><strong id="vaultWeak">0</strong><span>Zaif parollar</span></div>
+        <div class="security-stat"><strong id="vaultReused">0</strong><span>Takrorlangan parollar</span></div>
+      </div>
+    </div>
+    <div class="security-note">
+      ⚠️ Muhim: bu tahlil faqat uzunlik va belgilar tarkibini tekshiradi. U sizib chiqish bazalarini tekshirmaydi. Hozirgi KeyNest versiyasida saqlangan ma’lumotlar brauzer localStorage’ida shifrlanmagan — maxfiy parollarni bu versiyada saqlash xavfsiz deb hisoblamang.
+    </div>
+    <div class="security-status" id="securityStatus" aria-live="polite">Tahlilni boshlash uchun yuqoridagi tugmani bosing.</div>
+  </div>
+</section>
 
 <div class="main-layout">
 
@@ -1736,7 +1808,47 @@ document.getElementById("modalInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") handleModalConfirm();
 });
 
+
+/* KEYNEST 2.0 — local password health analysis.
+   This is a heuristic only; it does not check breach databases. */
+function analyzeVault() {
+  const history = getHistory();
+  const passwords = history
+    .map(item => typeof item.code === "string" ? item.code : "")
+    .filter(Boolean);
+  const normalized = passwords.map(value => value.toLowerCase());
+  const counts = new Map();
+  normalized.forEach(value => counts.set(value, (counts.get(value) || 0) + 1));
+  const reused = normalized.filter((value, index) => counts.get(value) > 1 &&
+    normalized.indexOf(value) === index).length;
+  const weak = passwords.filter(pwd =>
+    pwd.length < 12 ||
+    !/[a-z]/.test(pwd) ||
+    !/[A-Z]/.test(pwd) ||
+    !/[0-9]/.test(pwd) ||
+    !/[^A-Za-z0-9]/.test(pwd)
+  ).length;
+  const score = passwords.length
+    ? Math.max(0, 100 - (weak * 12) - (reused * 18))
+    : 0;
+  const scoreEl = document.getElementById("securityScore");
+  if (!scoreEl) return;
+  scoreEl.textContent = passwords.length ? String(score) : "—";
+  document.getElementById("securityScoreBar").style.width = score + "%";
+  document.getElementById("securityScoreBar").style.background =
+    score >= 80 ? "#16a34a" : score >= 50 ? "#eab308" : "#dc2626";
+  document.getElementById("securityGrade").textContent =
+    !passwords.length ? "Saqlangan parol yo‘q" :
+    score >= 80 ? "Yaxshi holat" : score >= 50 ? "Yaxshilash kerak" : "Xavfsizlikni kuchaytiring";
+  document.getElementById("vaultTotal").textContent = String(passwords.length);
+  document.getElementById("vaultWeak").textContent = String(weak);
+  document.getElementById("vaultReused").textContent = String(reused);
+  document.getElementById("securityStatus").textContent =
+    "Oxirgi tahlil: " + new Date().toLocaleString();
+}
+
 changeLanguage('uz');
+setTimeout(analyzeVault, 0);
 </script>
 
 </body>
